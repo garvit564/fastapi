@@ -10,6 +10,7 @@ class OrderRepository:
             user_id=order_data.user_id,
             product=order_data.product,
             amount=order_data.amount,
+            description=order_data.description,
             status=order_data.status
         )
 
@@ -37,6 +38,7 @@ class OrderRepository:
         order.user_id = order_data.user_id
         order.product = order_data.product
         order.amount = order_data.amount
+        order.description = order_data.description
         order.status = order_data.status
 
         db.commit()
@@ -54,6 +56,9 @@ class OrderRepository:
 
         if order_data.amount is not None:
             order.amount = order_data.amount
+
+        if order_data.description is not None:
+             order.discription = order_data.description    
 
         if order_data.status is not None:
             order.status = order_data.status

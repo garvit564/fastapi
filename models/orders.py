@@ -10,5 +10,5 @@ class Order(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     product = Column(String(150), nullable=False)
     amount = Column(Integer, nullable=False)
-    description = Column(Integer, nullable=True)
+    description = Column(String(100), nullable=True)
     status = Column(String(50), nullable=False)
