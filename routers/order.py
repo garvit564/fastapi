@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException,Depends
 
 from database import SessionLocal
 
@@ -7,7 +7,7 @@ from schemas.orders import (
     OrderUpdate,
     OrderPatch
 )
-
+from auth.security import get_current_user
 from services.order_services import order_service
 
 
@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.post("/orders")
-def create_order(order_data: OrderCreate):
+def create_order(order_data: OrderCreate,current_user = Depends(get_current_user)):
 
     db = SessionLocal()
 
@@ -36,11 +36,12 @@ def create_order(order_data: OrderCreate):
 
 
 @router.get("/orders/{order_id}")
-def get_order(order_id: int):
+def get_order(order_id: int,current_user = Depends(get_current_user)):
 
     db = SessionLocal()
 
     try:
+        
         order = order_service.get_order(
             db,
             order_id
@@ -50,6 +51,12 @@ def get_order(order_id: int):
             raise HTTPException(
                 status_code=404,
                 detail="Order not found"
+            )
+
+        if order.user_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail= "you cannot access another's order"
             )
 
         return order
@@ -68,15 +75,24 @@ def get_order(order_id: int):
 
 
 @router.get("/users/{user_id}/orders")
-def get_user_orders(user_id: int):
+def get_user_orders(user_id: int,current_user = Depends(get_current_user)):
 
     db = SessionLocal()
 
     try:
+        if user_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="you can not acsess other's order"
+            )
+
         return order_service.get_user_orders(
             db,
             user_id
         )
+
+    except HTTPException:
+        raise
 
     except Exception:
         raise HTTPException(
@@ -91,16 +107,17 @@ def get_user_orders(user_id: int):
 @router.put("/orders/{order_id}")
 def update_order(
     order_id: int,
-    order_data: OrderUpdate
+    order_data: OrderUpdate,
+    current_user = Depends(get_current_user)
 ):
 
     db = SessionLocal()
 
     try:
-        order = order_service.update_order(
+        order = order_service.get_order(
             db,
-            order_id,
-            order_data
+            order_id
+            
         )
 
         if order is None:
@@ -109,7 +126,15 @@ def update_order(
                 detail="Order not found"
             )
 
-        return order
+        if order.user_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="you cannot update other's order"
+            )
+
+        updated_order = order_service.update_order(db,order_id,order_data)
+
+        return updated_order
 
     except HTTPException:
         raise
@@ -127,16 +152,17 @@ def update_order(
 @router.patch("/orders/{order_id}")
 def patch_order(
     order_id: int,
-    order_data: OrderPatch
+    order_data: OrderPatch,
+    current_user = Depends(get_current_user)
 ):
 
     db = SessionLocal()
 
     try:
-        order = order_service.patch_order(
+        order = order_service.get_order(
             db,
-            order_id,
-            order_data
+            order_id
+            
         )
 
         if order is None:
@@ -144,8 +170,16 @@ def patch_order(
                 status_code=404,
                 detail="Order not found"
             )
+        if order.user_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="you cannot update another's order"
+            )
 
-        return order
+        updated_order = order_service.patch_order(db,order_id,order_data)
+
+
+        return updated_order
 
     except HTTPException:
         raise
@@ -161,11 +195,24 @@ def patch_order(
 
 
 @router.delete("/orders/{order_id}")
-def delete_order(order_id: int):
+def delete_order(order_id: int,current_user = Depends(get_current_user)):
 
     db = SessionLocal()
 
     try:
+        order = order_service.get_order(db,order_id)
+
+        if order is None:
+            raise HTTPException(
+                status_code=404,
+                detail="order not found"
+            )
+
+        if order.user_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="you cannot delete another'ss order"
+            )
         result = order_service.delete_order(
             db,
             order_id

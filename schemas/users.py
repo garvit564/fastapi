@@ -1,13 +1,19 @@
 from pydantic import BaseModel
 
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+    
 class UserCreate(BaseModel):
     first_name: str
     last_name: str
     email: str
+    password: str
     age: int
     phone: str
-    pincode:str
+    pincode: str
 
 
 class UserUpdate(BaseModel):

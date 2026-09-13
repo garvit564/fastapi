@@ -14,3 +14,4 @@ class User(Base):
     age = Column(Integer, nullable=False)
     phone = Column(String(20),nullable=True)
     pincode = Column(String(20),nullable=True)
+    password_hash = Column(String(255), nullable=True)
