@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-
+from sqlalchemy.orm import Session
+from database import get_db
 from database import SessionLocal
 from auth.google import oauth
 from schemas.users import (
@@ -11,6 +12,8 @@ from schemas.users import (
 from auth.security import (
     verify_password,
     create_access_token,
+    create_refresh_token,
+    verify_refresh_token,
     get_current_user,
 )
 from services.user_services import UserService
@@ -83,10 +86,17 @@ async def google_callback(request: Request):
 
         # 7. Hamare application ka JWT create karo
         access_token = create_access_token(user.id)
+        refresh_token = create_refresh_token(user.id)
+
+        request.session["user_id"] = user.id
+        request.session["access_token"] = access_token
+        request.session["refresh_token"] = refresh_token
+
 
         # 8. Client ko JWT return karo
         return {
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer"
         }
 
@@ -107,10 +117,41 @@ async def google_callback(request: Request):
         db.close()
 
 
+@router.post("/refresh")
+def refresh_access_token(request: Request):
+
+    refresh_token = request.session.get("refresh_token")
+
+    if not refresh_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Refresh token not found"
+        )
+
+    user_id = verify_refresh_token(refresh_token)
+
+    new_access_token = create_access_token(user_id)
+
+    request.session["access_token"] = new_access_token
+
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer"
+    }
+
+
+@router.get("/test-session")
+async def test_session(request: Request):
+    return {
+        "user_id": request.session.get("user_id"),
+        "access_token": request.session.get("access_token"),
+        "refresh_token": request.session.get("refresh_token")
+    }
+
 
 
 @router.post("/login")
-def login(login_data: LoginRequest):
+def login(login_data: LoginRequest,request:Request):
     db = SessionLocal()
 
     try:
@@ -137,9 +178,15 @@ def login(login_data: LoginRequest):
             )
 
         access_token = create_access_token(user.id)
+        refresh_token = create_refresh_token(user.id)
+
+        request.session["user_id"] = user.id
+        request.session["access_token"] = access_token
+        request.session["refresh_token"] = refresh_token
 
         return {
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer"
         }
 
@@ -156,6 +203,14 @@ def login(login_data: LoginRequest):
     finally:
         db.close()
 
+
+@router.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+
+    return {
+        "message": "Logged out successfully"
+    }
 
 
 
@@ -178,11 +233,11 @@ def create_user(user_data: UserCreate):
 
 
 @router.get("/users")
-def get_users(current_user = Depends(get_current_user)):
+def get_users(current_user = Depends(get_current_user),db: Session = Depends(get_db)):
     print(current_user.id)
     print(current_user.email)
 
-    db = SessionLocal()
+    
     
     try:
         return user_service.get_users(db)
@@ -193,74 +248,30 @@ def get_users(current_user = Depends(get_current_user)):
             detail="Failed to fetch users"
         )
 
-    finally:
-        db.close()
+    
 
 
-@router.get("/users/{user_id}")
-def get_user(
-    user_id: int,
-    current_user=Depends(get_current_user)):
-
-    if user_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="You cannot access another user's profile"
-        )
-
-    db = SessionLocal()
-
-    try:
-        user = user_service.get_user(db, user_id)
-
-        if user is None:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found"
-            )
-
-        return user
-
-    except HTTPException:
-        raise
-
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to fetch user"
-        )
-
-    finally:
-        db.close()
-
-
-@router.put("/users/{user_id}")
-def update_user(
-    user_id: int,
-    user_data: UserUpdate,
+@router.get("/users/me")
+def get_my_profile(
     current_user=Depends(get_current_user)
 ):
+    return current_user
 
-    if user_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="You cannot update another user's profile"
-        )
 
-    db = SessionLocal()
+@router.put("/users/me")
+def update_my_profile(
+    user_data: UserUpdate,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+   
 
     try:
         user = user_service.update_user(
             db,
-            user_id,
+            current_user,
             user_data
         )
-
-        if user is None:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found"
-            )
 
         return user
 
@@ -273,84 +284,54 @@ def update_user(
             detail="Failed to update user"
         )
 
-    finally:
-        db.close()
 
 
-@router.patch("/users/{user_id}")
-def patch_user(
-    user_id: int,
+@router.patch("/users/me")
+def patch_my_profile(
     user_data: UserPatch,
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-
-    if user_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="You cannot update another user's profile"
-        )
-
-    db = SessionLocal()
+    
 
     try:
         user = user_service.patch_user(
             db,
-            user_id,
+            current_user,
             user_data
         )
-
-        if user is None:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found"
-            )
 
         return user
 
     except HTTPException:
         raise
 
-    except Exception:
+    except Exception as e:
+        print("PATCH ERROR:", repr(e))
         raise HTTPException(
             status_code=500,
-            detail="Failed to update user"
+            detail=str(e)
         )
 
-    finally:
-        db.close()
 
 
-@router.delete("/users/{user_id}")
-def delete_user(
-    user_id: int,
-    current_user=Depends(get_current_user)):
 
-    if user_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="You cannot delete another user's profile"
-        )
-
-    db = SessionLocal()
+@router.delete("/users/me")
+def delete_my_account(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    
 
     try:
-        result = user_service.delete_user(
+        user_service.delete_user(
             db,
-            user_id
+            current_user
         )
-
-        if result is None:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found"
-            )
 
         return {
             "message": "User deleted successfully"
         }
-
-    except HTTPException:
-        raise
 
     except Exception:
         raise HTTPException(
@@ -358,5 +339,4 @@ def delete_user(
             detail="Failed to delete user"
         )
 
-    finally:
-        db.close()
+    

@@ -15,7 +15,8 @@ app = FastAPI()
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SESSION_SECRET_KEY")
+    secret_key=os.getenv("SESSION_SECRET_KEY"),
+    max_age=60 * 60 * 24 * 7
 )
 
 # Base.metadata.create_all(bind=engine)

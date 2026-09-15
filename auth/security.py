@@ -1,3 +1,4 @@
+from fastapi import Request, HTTPException
 from passlib.context import CryptContext
 import os
 from datetime import datetime, timedelta, timezone
@@ -8,7 +9,8 @@ from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from database import SessionLocal
-
+from database import get_db
+from sqlalchemy.orm import Session
 from models.user import User
 
 
@@ -35,7 +37,7 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 
 def create_access_token(user_id:int):
-    expire = datetime.now(timezone.utc) + timedelta(minutes=30)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     payload = {
         "sub":str(user_id),
         "exp":expire
@@ -48,13 +50,21 @@ def create_access_token(user_id:int):
     return token
 
 
+def create_refresh_token(user_id: int):
+    expire = datetime.now(timezone.utc) + timedelta(days=7)
+    payload = {
+        "sub":str(user_id),
+        "type":"refresh",
+        "exp":expire
+    }
+    token = jwt.encode(
+        payload,
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+    return token
 
-
-def get_current_user(
-    token: str = Depends(oauth2_scheme)
-):
-    db = SessionLocal()
-
+def verify_refresh_token(token: str):
     try:
         payload = jwt.decode(
             token,
@@ -62,34 +72,45 @@ def get_current_user(
             algorithms=[ALGORITHM]
         )
 
+        if payload.get("type") != "refresh":
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid refresh token"
+            )
+
         user_id = payload.get("sub")
 
         if user_id is None:
             raise HTTPException(
                 status_code=401,
-                detail="Invalid token"
+                detail="Invalid refresh token"
             )
 
-        user = (
-            db.query(User)
-            .filter(User.id == int(user_id))
-            .first()
-        )
-
-        if user is None:
-            raise HTTPException(
-                status_code=401,
-                detail="User not found"
-            )
-
-        return user
+        return int(user_id)
 
     except JWTError:
         raise HTTPException(
             status_code=401,
-            detail="Invalid or expired token"
-
+            detail="Invalid or expired refresh token"
         )
 
-    finally:
-        db.close()
+
+def get_current_user(request: Request,db:Session = Depends(get_db)):
+    user_id = request.session.get("user_id")
+
+    if user_id is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated"
+        )
+    
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="User not found"
+        )
+    return user
+
+    

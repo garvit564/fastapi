@@ -12,12 +12,12 @@ class UserService:
         return self.repository.create_user(db, user_data)
 
     def create_google_user(
-    self,
-    db: Session,
-    first_name: str,
-    last_name: str,
-    email: str
-):
+        self,
+        db: Session,
+        first_name: str,
+        last_name: str,
+        email: str
+    ):
         return self.repository.create_google_user(
             db,
             first_name,
@@ -28,39 +28,38 @@ class UserService:
     def get_users(self, db: Session):
         return self.repository.get_all_users(db)
 
-    def get_user(self, db: Session, user_id: int):
-        return self.repository.get_user_by_id(db, user_id)
-
-    def update_user(self, db: Session, user_id: int, user_data):
-        user = self.repository.get_user_by_id(db, user_id)
-
-        if user is None:
-            return None
-
+    def update_user(
+        self,
+        db: Session,
+        user,
+        user_data
+    ):
         return self.repository.update_user(
             db,
             user,
             user_data
         )
 
-    def patch_user(self, db: Session, user_id: int, user_data):
-        user = self.repository.get_user_by_id(db, user_id)
-
-        if user is None:
-            return None
-
+    def patch_user(
+        self,
+        db: Session,
+        user,
+        user_data
+    ):
         return self.repository.patch_user(
             db,
             user,
             user_data
         )
 
-    def delete_user(self, db: Session, user_id: int):
-        user = self.repository.get_user_by_id(db, user_id)
-
-        if user is None:
-            return None
-
-        self.repository.delete_user(db, user)
+    def delete_user(
+        self,
+        db: Session,
+        user
+    ):
+        self.repository.delete_user(
+            db,
+            user
+        )
 
         return True
