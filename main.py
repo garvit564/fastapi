@@ -1,7 +1,8 @@
 from fastapi import FastAPI
-
+import os
+from dotenv import load_dotenv
 from database import engine, Base
-
+from starlette.middleware.sessions import SessionMiddleware
 from models.user import User
 from models.orders import Order
 
@@ -9,8 +10,13 @@ from routers.user import router as user_router
 from routers.order import router as order_router
 from routers.report import router as report_router
 
-
+load_dotenv()
 app = FastAPI()
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET_KEY")
+)
 
 # Base.metadata.create_all(bind=engine)
 

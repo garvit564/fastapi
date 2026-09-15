@@ -11,6 +11,20 @@ class UserService:
     def create_user(self, db: Session, user_data):
         return self.repository.create_user(db, user_data)
 
+    def create_google_user(
+    self,
+    db: Session,
+    first_name: str,
+    last_name: str,
+    email: str
+):
+        return self.repository.create_google_user(
+            db,
+            first_name,
+            last_name,
+            email
+        )
+
     def get_users(self, db: Session):
         return self.repository.get_all_users(db)
 

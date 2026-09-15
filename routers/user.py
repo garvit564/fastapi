@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from database import SessionLocal
-
+from auth.google import oauth
 from schemas.users import (
     UserCreate,
     UserUpdate,
@@ -19,6 +19,94 @@ from services.user_services import UserService
 router = APIRouter()
 
 user_service = UserService()
+
+
+@router.get("/auth/google")
+async def google_login(request: Request):
+    redirect_uri = request.url_for("google_callback")
+
+    return await oauth.google.authorize_redirect(
+        request,
+        redirect_uri
+    )
+
+@router.get("/auth/google/callback")
+async def google_callback(request: Request):
+
+    db = SessionLocal()
+
+    try:
+        # 1. Google authorization code ko token mein exchange karo
+        token = await oauth.google.authorize_access_token(request)
+
+        # 2. Google se user information nikalo
+        user_info = token.get("userinfo")
+
+        if not user_info:
+            raise HTTPException(
+                status_code=400,
+                detail="Google user information not found"
+            )
+
+        # 3. Required Google information nikalo
+        email = user_info.get("email")
+        first_name = user_info.get("given_name")
+        last_name = user_info.get("family_name")
+
+        # 4. Basic validation
+        if not email:
+            raise HTTPException(
+                status_code=400,
+                detail="Google account email not found"
+            )
+
+        if not user_info.get("email_verified"):
+            raise HTTPException(
+                status_code=400,
+                detail="Google email is not verified"
+            )
+
+        # 5. Local database mein email se user search karo
+        user = user_service.repository.get_user_by_email(
+            db,
+            email
+        )
+
+        # 6. Agar user nahi mila → new user create karo
+        if user is None:
+            user = user_service.create_google_user(
+                db,
+                first_name or "",
+                last_name or "",
+                email
+            )
+
+        # 7. Hamare application ka JWT create karo
+        access_token = create_access_token(user.id)
+
+        # 8. Client ko JWT return karo
+        return {
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        print("Google login error", repr(e))
+        raise
+
+    # except Exception:
+    #     raise HTTPException(
+    #         status_code=500,
+    #         detail="Google login failed"
+    #     )
+
+    finally:
+        db.close()
+
+
 
 
 @router.post("/login")

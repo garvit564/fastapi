@@ -21,6 +21,22 @@ class UserRepository:
 
         return user
 
+    def create_google_user(self,db :Session,first_name:str,last_name:str,email:str):
+        user = User(
+            first_name = first_name,
+            last_name = last_name,
+            email = email,
+            age=None,
+            phone=None,
+            pincode=None,
+            password_hash=None
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+
     def get_user_by_email(self, db: Session, email: str):
         return db.query(User).filter(User.email == email).first()
     
