@@ -44,10 +44,13 @@ class UserRepository:
     def get_all_users(self, db: Session):
         return db.query(User).all()
 
-    # def get_user_by_id(self, db: Session, user_id: int):
-    #     return db.query(User).filter(User.id == user_id).first()
+    def get_user_by_id(self, db: Session, user_id: int):
+        return db.query(User).filter(User.id == user_id).first()
 
-    def update_user(self, db: Session, user, user_data):
+    def update_user(self, db: Session, user_id, user_data):
+
+        user  = self.get_user_by_id(db,user_id)
+
         user.first_name = user_data.first_name
         user.last_name = user_data.last_name
         user.email = user_data.email
@@ -60,7 +63,10 @@ class UserRepository:
 
         return user
 
-    def patch_user(self, db: Session, user, user_data):
+    def patch_user(self, db: Session, user_id, user_data):
+
+        user  = self.get_user_by_id(db,user_id)
+
         if user_data.first_name is not None:
             user.first_name = user_data.first_name
 
@@ -84,6 +90,8 @@ class UserRepository:
 
         return user
 
-    def delete_user(self, db: Session, user):
+    def delete_user(self, db: Session, user_id):
+        user = self.get_user_by_id(db,user_id)
+        
         db.delete(user)
         db.commit()

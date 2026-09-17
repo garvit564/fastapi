@@ -15,9 +15,13 @@ from auth.security import (
     create_refresh_token,
     verify_refresh_token,
     get_current_user,
+    get_current_user_id
 )
 from services.user_services import UserService
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -26,7 +30,9 @@ user_service = UserService()
 
 @router.get("/auth/google")
 async def google_login(request: Request):
+    logger.info("Google login initiated")
     redirect_uri = request.url_for("google_callback")
+    logger.info("Redirecting user to Google")
 
     return await oauth.google.authorize_redirect(
         request,
@@ -34,16 +40,19 @@ async def google_login(request: Request):
     )
 
 @router.get("/auth/google/callback")
-async def google_callback(request: Request):
+async def google_callback(request: Request,db: Session = Depends(get_db)):
 
-    db = SessionLocal()
+    logger.info("Google callback received")
 
     try:
         # 1. Google authorization code ko token mein exchange karo
         token = await oauth.google.authorize_access_token(request)
+        logger.info("Google authorization successful")
+
 
         # 2. Google se user information nikalo
         user_info = token.get("userinfo")
+        logger.info("Google user information received")
 
         if not user_info:
             raise HTTPException(
@@ -74,6 +83,7 @@ async def google_callback(request: Request):
             db,
             email
         )
+        logger.info("user fetched from db")
 
         # 6. Agar user nahi mila → new user create karo
         if user is None:
@@ -84,13 +94,19 @@ async def google_callback(request: Request):
                 email
             )
 
+            logger.info("user created")   
+
         # 7. Hamare application ka JWT create karo
         access_token = create_access_token(user.id)
         refresh_token = create_refresh_token(user.id)
 
+        logger.info("access token and refresh token generated")
+
         request.session["user_id"] = user.id
         request.session["access_token"] = access_token
         request.session["refresh_token"] = refresh_token
+
+        logger.info("token stored in session")
 
 
         # 8. Client ko JWT return karo
@@ -113,8 +129,7 @@ async def google_callback(request: Request):
     #         detail="Google login failed"
     #     )
 
-    finally:
-        db.close()
+    
 
 
 @router.post("/refresh")
@@ -232,36 +247,38 @@ def create_user(user_data: UserCreate):
         db.close()
 
 
-@router.get("/users")
-def get_users(current_user = Depends(get_current_user),db: Session = Depends(get_db)):
-    print(current_user.id)
-    print(current_user.email)
+# @router.get("/users")
+# def get_users(current_user = Depends(get_current_user),db: Session = Depends(get_db)):
+#     print(current_user.id)
+#     print(current_user.email)
 
     
     
-    try:
-        return user_service.get_users(db)
+#     try:
+#         return user_service.get_users(db)
 
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to fetch users"
-        )
+#     except Exception:
+#         raise HTTPException(
+#             status_code=500,
+#             detail="Failed to fetch users"
+#         )
 
     
 
 
 @router.get("/users/me")
-def get_my_profile(
-    current_user=Depends(get_current_user)
-):
-    return current_user
+@get_current_user_id
+def get_my_profile(request:Request, user_id :int,db: Session = Depends(get_db)):
+    user = user_service.get_user(db,user_id)
+    return user
 
 
 @router.put("/users/me")
+@get_current_user_id
 def update_my_profile(
+    request:Request,
     user_data: UserUpdate,
-    current_user=Depends(get_current_user),
+    user_id:int,
     db: Session = Depends(get_db)
 ):
    
@@ -269,7 +286,7 @@ def update_my_profile(
     try:
         user = user_service.update_user(
             db,
-            current_user,
+            user_id,
             user_data
         )
 
@@ -287,9 +304,11 @@ def update_my_profile(
 
 
 @router.patch("/users/me")
+@get_current_user_id
 def patch_my_profile(
+    request:Request,
     user_data: UserPatch,
-    current_user=Depends(get_current_user),
+   user_id,
     db: Session = Depends(get_db)
 ):
     
@@ -297,7 +316,7 @@ def patch_my_profile(
     try:
         user = user_service.patch_user(
             db,
-            current_user,
+            user_id,
             user_data
         )
 
@@ -317,8 +336,10 @@ def patch_my_profile(
 
 
 @router.delete("/users/me")
+@get_current_user_id
 def delete_my_account(
-    current_user=Depends(get_current_user),
+    request:Request,
+    user_id:int,
     db: Session = Depends(get_db)
 ):
     
@@ -326,7 +347,7 @@ def delete_my_account(
     try:
         user_service.delete_user(
             db,
-            current_user
+            user_id
         )
 
         return {

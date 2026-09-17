@@ -12,10 +12,13 @@ from database import SessionLocal
 from database import get_db
 from sqlalchemy.orm import Session
 from models.user import User
-
-
-
+import logging
+from functools import wraps
+from inspect import signature
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 pwd_context = CryptContext(
@@ -113,4 +116,54 @@ def get_current_user(request: Request,db:Session = Depends(get_db)):
         )
     return user
 
-    
+
+
+
+def get_current_user_id(func):
+
+    original_signature = signature(func)
+
+    parameters = [
+        parameter
+        for name, parameter in original_signature.parameters.items()
+        if name != "user_id"
+    ]
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+
+        # request nikalo
+        request = kwargs.get("request")
+
+        if request is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Request not found"
+            )
+
+        # db nikalo
+        db = kwargs.get("db")
+
+        if db is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Database session not found"
+            )
+
+        # existing get_current_user use karo
+        current_user = get_current_user(request, db)
+
+        # User object se sirf ID nikalo
+        user_id = current_user.id
+
+        # API ke kwargs mein user_id add karo
+        kwargs["user_id"] = user_id
+
+        # original API call karo
+        return func(*args, **kwargs)
+
+    wrapper.__signature__ = original_signature.replace(
+        parameters=parameters
+    )
+
+    return wrapper

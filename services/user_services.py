@@ -28,38 +28,43 @@ class UserService:
     def get_users(self, db: Session):
         return self.repository.get_all_users(db)
 
+    def get_user(self,db:Session,user_id):
+        user = self.repository.get_user_by_id(db,user_id)
+
+        return user
+
     def update_user(
         self,
         db: Session,
-        user,
+        user_id,
         user_data
     ):
         return self.repository.update_user(
             db,
-            user,
+            user_id,
             user_data
         )
 
     def patch_user(
         self,
         db: Session,
-        user,
+        user_id,
         user_data
     ):
         return self.repository.patch_user(
             db,
-            user,
+            user_id,
             user_data
         )
 
     def delete_user(
         self,
         db: Session,
-        user
+        user_id
     ):
         self.repository.delete_user(
             db,
-            user
+            user_id
         )
 
         return True
