@@ -58,7 +58,7 @@ class OrderRepository:
             order.amount = order_data.amount
 
         if order_data.description is not None:
-             order.discription = order_data.description    
+            order.description = order_data.description
 
         if order_data.status is not None:
             order.status = order_data.status
